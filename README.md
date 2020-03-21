@@ -25,6 +25,7 @@ plugins: [
     options: {
       apiKey: `YOUR_AIRTABLE_KEY`, // may instead specify via env, see below
       concurrency: 5, // default, see using markdown and attachments for more information
+      cleanKey: key => key.replace(/ /g, "_"), // default, see "Column Names" for more information
       tables: [
         {
           baseId: `YOUR_AIRTABLE_BASE_ID`,
@@ -126,6 +127,8 @@ If you would like to have the query names for tables be different from the defau
 ### Column Names
 
 Within graphql (the language you query information from and that this plugin puts nodes into), there are character limitations. Most specifically we cannot have spaces in field names. We don't want to force you to change your Airtable names, so we will "clean" the keys and replace the spaces with an underscore (e.g. The Column Name becomes The_Column_Name). We use the cleaned name everywhere including `gatsby-config.js` and within your queries. We don't warn you when this happens to cut down on the verbosity of the output.
+
+If you would like to change the way keys are transformed (for example, converting to snakeCase) you can provide a function to the `cleanKey` option in `gatsby-config.js`. The function should take a single string as its input and return a transformed string compatible with graphql.
 
 ### API Keys
 
