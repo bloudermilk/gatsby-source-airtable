@@ -5,7 +5,7 @@ const { map } = require("bluebird");
 
 exports.sourceNodes = async (
   { actions, createNodeId, store, cache },
-  { apiKey, tables, concurrency }
+  { apiKey, tables, concurrency, cleanKey }
 ) => {
   // tables contain baseId, tableName, tableView, queryName, mapping, tableLinks
   const { createNode, setPluginStatus } = actions;
@@ -42,6 +42,18 @@ exports.sourceNodes = async (
     // requests for remote files has been selected in that spirit. A higher value can be set as a plugin
     // option in gatsby-config.js
     concurrency = 5;
+  }
+
+  // A user-defined function may be provided for `cleanKey`, otherwise a default
+  // will be used when `undefined`
+  if (cleanKey === undefined) {
+    // Default cleanKey function replaces spaces with underscores
+    cleanKey = key => key.replace(/ /g, "_");
+  } else if (typeof cleanKey !== "function") {
+    console.warn(
+      "\ncleanKey must be a function or undefined to use the default value"
+    );
+    return;
   }
 
   console.time(`\nfetch all Airtable rows from ${tables.length} tables`);
@@ -164,7 +176,8 @@ exports.sourceNodes = async (
         createNodeId,
         createNode,
         store,
-        cache
+        cache,
+        cleanKey
       });
 
       if (row.separateNodeType && (!row.queryName || row.queryName === "")) {
@@ -203,7 +216,7 @@ exports.sourceNodes = async (
   );
 };
 
-const processData = async (row, { createNodeId, createNode, store, cache }) => {
+const processData = async (row, { createNodeId, createNode, store, cache, cleanKey }) => {
   let data = row.fields;
   let tableLinks = row.tableLinks;
   let fieldKeys = Object.keys(data);
@@ -239,7 +252,8 @@ const processData = async (row, { createNodeId, createNode, store, cache }) => {
         createNodeId,
         createNode,
         store,
-        cache
+        cache,
+        cleanKey
       });
       childNodes.push(checkedChildNode);
     } else {
@@ -259,7 +273,7 @@ const checkChildNode = async (
   key,
   row,
   processedData,
-  { createNodeId, createNode, store, cache }
+  { createNodeId, createNode, store, cache, cleanKey }
 ) => {
   let data = row.fields;
   let mapping = row.mapping;
@@ -268,7 +282,8 @@ const checkChildNode = async (
     createNodeId,
     createNode,
     store,
-    cache
+    cache,
+    cleanKey
   });
 
   processedData[`${cleanedKey}___NODE`] = createNodeId(
@@ -281,14 +296,15 @@ const checkChildNode = async (
     cleanedKey,
     data[key],
     mapping[key],
-    createNodeId
+    createNodeId,
+    cleanKey
   );
 };
 
 const localFileCheck = async (
   key,
   row,
-  { createNodeId, createNode, store, cache }
+  { createNodeId, createNode, store, cache, cleanKey }
 ) => {
   let data = row.fields;
   let mapping = row.mapping;
@@ -326,7 +342,7 @@ const localFileCheck = async (
   return;
 };
 
-const buildNode = (localFiles, row, cleanedKey, raw, mapping, createNodeId) => {
+const buildNode = (localFiles, row, cleanedKey, raw, mapping, createNodeId, cleanKey) => {
   const nodeType = row.separateNodeType
     ? `Airtable${cleanKey(row.queryName ? row.queryName : row._table.name)}`
     : `Airtable`;
@@ -364,10 +380,6 @@ const buildNode = (localFiles, row, cleanedKey, raw, mapping, createNodeId) => {
       }
     };
   }
-};
-
-const cleanKey = (key, data) => {
-  return key.replace(/ /g, "_");
 };
 
 const cleanType = key => {
