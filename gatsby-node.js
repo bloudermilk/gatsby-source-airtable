@@ -3,6 +3,11 @@ const crypto = require(`crypto`);
 const { createRemoteFileNode } = require(`gatsby-source-filesystem`);
 const { map } = require("bluebird");
 
+const DIRTY_WARNING = `Field names within graphql cannot have spaces. We do not
+want you to change your column names within Airtable, but in "Gatsby-land" you
+will need to always use the "cleaned" key. See https://github.com/jbolda/gatsby-source-airtable#column-names
+for more information.`
+
 exports.sourceNodes = async (
   { actions, createNodeId, store, cache },
   { apiKey, tables, concurrency, cleanKey }
@@ -70,42 +75,31 @@ exports.sourceNodes = async (
       view: view
     });
 
-    // confirm that the user is using the clean keys
-    // if they are not, warn them and change it for them
-    // we can settle the API on clean keys and not have a breaking
-    // change until the next major version when we remove this
-    const cleanMapping = !tableOptions.mapping
-      ? null
-      : Object.keys(tableOptions.mapping).reduce((cleaned, key) => {
-          let useKey = cleanKey(key);
-          if (useKey !== key)
-            console.warn(`
-        Field names within graphql cannot have spaces. We do not want you to change your column names
-        within Airtable, but in "Gatsby-land" you will need to always use the "cleaned" key.
-        On the ${tableOptions.tableName} base ${tableOptions.baseId} 'mapping', we modified the supplied key of
-        ${key} to instead be ${useKey}. Please use ${useKey} in all of your queries. Also, update your config
-        to use ${useKey} to make this warning go away. See https://github.com/jbolda/gatsby-source-airtable#column-names
-        for more information.
-      `);
-          cleaned[useKey] = tableOptions.mapping[key];
-          return cleaned;
-        }, {});
 
-    const cleanLinks = !tableOptions.tableLinks
-      ? null
-      : tableOptions.tableLinks.map(key => {
-          let useKey = cleanKey(key);
-          if (useKey !== key)
-            console.warn(`
-        Field names within graphql cannot have spaces. We do not want you to change your column names
-        within Airtable, but in "Gatsby-land" you will need to always use the "cleaned" key.
-        On the ${tableOptions.tableName} base ${tableOptions.baseId} 'tableLinks', we modified the supplied key of
-        ${key} to instead be ${useKey}. Please use ${useKey} in all of your queries. Also, update your config
-        to use ${useKey} to make this warning go away. See https://github.com/jbolda/gatsby-source-airtable#column-names
-        for more information.
-      `);
-          return useKey;
-        });
+    // Confirm that the user is using the clean keys. If they are not, warn them
+    const isDirty = key => key.indexOf(' ') >= 0;
+    const dirtyMappings = tableOptions.mapping
+      ? Object.keys(tableOptions.mapping).filter(isDirty)
+      : [];
+    const dirtyLinks = tableOptions.tableLinks
+      ? tableOptions.tableLinks.filter(isDirty)
+      : [];
+
+    if (dirtyMappings.length) console.warn(`
+      ${DIRTY_WARNING}
+      On the ${tableOptions.tableName} base ${tableOptions.baseId} 'mapping',
+      you must use the cleaned name for ${dirtyMappings.join(', ')}
+    `);
+
+    if (dirtyLinks.length) console.warn(`
+      ${DIRTY_WARNING}
+      On the ${tableOptions.tableName} base ${tableOptions.baseId} 'tableLinks',
+      you must use the cleaned name for ${dirtyLinks.join(', ')}
+    `);
+
+    // Short-circuit if any keys are dirty, after giving warnings for both
+    // `mappings` and `tableLinks`
+    if (dirtyMappings.length || dirtyLinks.length) return
 
     // query.all() returns a promise, pass an array for each table with
     // both our promise and the queryName and then map reduce at the
